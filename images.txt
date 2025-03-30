@@ -16,3 +16,6 @@ cooderl/wewe-rss-sqlite
 ghcr.io/home-assistant/home-assistant:stable
 
 jericx/syncclipboard-server:latest
+
+docker.io/library/python:3.12-slim
+docker.io/library/node:20-alpine
