@@ -6,16 +6,18 @@
 #--platform=linux/arm64 xiaoyaliu/alist
 
 
-gitlab/gitlab-ee:14.7.3-ee.0
-vaultwarden/server:latest
-caddy:2 
-mtphotos/mt-photos:latest
-mtphotos/mt-photos-ai:latest
-luodaoyi/kms-server
-cooderl/wewe-rss-sqlite
-ghcr.io/home-assistant/home-assistant:stable
+#gitlab/gitlab-ee:14.7.3-ee.0
+#vaultwarden/server:latest
+#caddy:2 
+#mtphotos/mt-photos:latest
+vmtphotos/mt-photos-ai:latest
+#luodaoyi/kms-server
+#cooderl/wewe-rss-sqlite
+#ghcr.io/home-assistant/home-assistant:stable
 
-jericx/syncclipboard-server:latest
+#jericx/syncclipboard-server:latest
 
-docker.io/library/python:3.12-slim
-docker.io/library/node:20-alpine
+#docker.io/library/python:3.12-slim
+#docker.io/library/node:20-alpine
+
+golangboyme/wxocr
