@@ -10,7 +10,7 @@
 #vaultwarden/server:latest
 #caddy:2 
 #mtphotos/mt-photos:latest
-vmtphotos/mt-photos-ai:latest
+#mtphotos/mt-photos-ai:latest
 #luodaoyi/kms-server
 #cooderl/wewe-rss-sqlite
 #ghcr.io/home-assistant/home-assistant:stable
