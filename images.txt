@@ -5,6 +5,8 @@ xhofe/alist:latest
 #支持指定架构
 #--platform=linux/arm64 xiaoyaliu/alist
 
+docker.io/library/node:20-bookworm-slim
+
 docker.io/library/debian:bookworm-slim
 docker.io/library/rust:1-bookworm
 
