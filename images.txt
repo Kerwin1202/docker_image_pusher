@@ -5,6 +5,9 @@ xhofe/alist:latest
 #支持指定架构
 #--platform=linux/arm64 xiaoyaliu/alist
 
+gitlab/gitlab-runner-helper:x86_64-6fbc7474 
+gitlab/gitlab-runner:latest
+
 docker.io/library/node:20-bookworm
 
 docker.io/library/node:20-bookworm-slim
