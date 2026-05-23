@@ -5,6 +5,10 @@ xhofe/alist:latest
 #支持指定架构
 #--platform=linux/arm64 xiaoyaliu/alist
 
+
+mcr.microsoft.com/dotnet/sdk:9.0
+mcr.microsoft.com/dotnet/runtime:9.0
+
 gitlab/gitlab-runner-helper:x86_64-6fbc7474 
 gitlab/gitlab-runner:latest
 
