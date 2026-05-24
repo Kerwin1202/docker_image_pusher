@@ -78,10 +78,10 @@ jobs:
             fi
             echo "platform_segment is $platform_segment"
 
-            # 获取镜像的完整名称，例如mcr.microsoft.com/dotnet/sdk:9.0
-            image=$(echo "$line" | awk '{print $NF}')
-            # 将@sha256:等字符删除
-            image="${image%%@*}"
+            # 获取镜像的完整名称，保留 digest 用于 docker tag 源镜像引用
+            source_image=$(echo "$line" | awk '{print $NF}')
+            # 解析命名时使用去掉 digest 的镜像名
+            image="${source_image%%@*}"
 
             # 分离镜像路径与标签
             image_with_tag=$(echo "$image" | awk -F'/' '{print $NF}')
@@ -107,15 +107,17 @@ jobs:
             fi
             new_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$flat_repo:$tag"
 
-            echo "docker tag $image $new_image"
-            docker tag $image $new_image
+            echo "docker tag $source_image $new_image"
+            docker tag $source_image $new_image
             echo "docker push $new_image"
             docker push $new_image
             echo "开始清理磁盘空间"
             echo "=============================================================================="
             df -hT
             echo "=============================================================================="
-            docker rmi $image
+            if ! docker rmi $source_image; then
+                docker rmi $image
+            fi
             docker rmi $new_image
             echo "磁盘空间清理完毕"
             echo "=============================================================================="
