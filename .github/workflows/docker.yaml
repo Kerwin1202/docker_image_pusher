@@ -100,10 +100,10 @@ jobs:
                 image_path=$(echo "$image_path" | cut -d'/' -f2-)
             fi
 
-            # 阿里云个人版通常只支持 namespace/repository 两级，这里将路径拍平
-            flat_repo="${image_path//\//__}"
+            # 阿里云个人版通常只支持 namespace/repository 两级，这里将路径拍平（/ 替换为 _）
+            flat_repo="${image_path//\//_}"
             if [[ -n "$platform_segment" ]]; then
-                flat_repo="${flat_repo}__${platform_segment}"
+                flat_repo="${flat_repo}_${platform_segment}"
             fi
             new_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$flat_repo:$tag"
 
