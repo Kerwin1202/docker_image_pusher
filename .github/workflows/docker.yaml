@@ -70,7 +70,7 @@ jobs:
             docker pull $line
             platform=$(echo "$line" | awk -F'--platform[ =]' '{if (NF>1) print $2}' | awk '{print $1}')
             echo "platform is $platform"
-            # 如果存在架构信息，放在命名空间与镜像名之间
+            # 如果存在架构信息，追加到拍平后的镜像名末尾
             if [ -z "$platform" ]; then
                 platform_segment=""
             else
@@ -106,6 +106,7 @@ jobs:
                 flat_repo="${flat_repo}__${platform_segment}"
             fi
             new_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$flat_repo:$tag"
+
             echo "docker tag $image $new_image"
             docker tag $image $new_image
             echo "docker push $new_image"
