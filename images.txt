@@ -46,4 +46,6 @@
 #uuphy/ipa-harbor
 # acr-mirror-manager rerun: 2026-06-03 08:58:21Z
 
-official/acme
+#official/acme
+
+neilpang/acme.sh
