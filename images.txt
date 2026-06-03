@@ -1,27 +1,27 @@
 #nginx
 #支持私库
 #k8s.gcr.io/kube-state-metrics/kube-state-metrics:v2.0.0
-xhofe/alist:latest
+#xhofe/alist:latest
 #支持指定架构
 #--platform=linux/arm64 xiaoyaliu/alist
 
 
-mcr.microsoft.com/dotnet/sdk:9.0
-mcr.microsoft.com/dotnet/runtime:9.0
-mcr.microsoft.com/dotnet/aspnet:9.0
+#mcr.microsoft.com/dotnet/sdk:9.0
+#mcr.microsoft.com/dotnet/runtime:9.0
+#mcr.microsoft.com/dotnet/aspnet:9.0
 
-gitlab/gitlab-runner-helper:x86_64-6fbc7474 
-gitlab/gitlab-runner:latest
+#gitlab/gitlab-runner-helper:x86_64-6fbc7474 
+#gitlab/gitlab-runner:latest
 
-docker.io/library/node:20-bookworm
+#docker.io/library/node:20-bookworm
 
-docker.io/library/node:20-bookworm-slim
+#docker.io/library/node:20-bookworm-slim
 
-docker.io/library/debian:bookworm-slim
-docker.io/library/rust:1-bookworm
+#docker.io/library/debian:bookworm-slim
+#docker.io/library/rust:1-bookworm
 
 #gitlab/gitlab-ee:14.7.3-ee.0
-vaultwarden/server:latest
+#vaultwarden/server:latest
 #caddy:2 
 mtphotos/mt-photos:latest
 mtphotos/mt-photos-ai:latest
@@ -37,10 +37,11 @@ mtphotos/mt-photos-ai:latest
 #golangboyme/wxocr
 
 #immich
-ghcr.io/immich-app/immich-server:release
-ghcr.io/immich-app/immich-machine-learning:release
-docker.io/valkey/valkey:8-bookworm@sha256:fea8b3e67b15729d4bb70589eb03367bab9ad1ee89c876f54327fc7c6e618571
-ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:41eacbe83eca995561fe43814fd4891e16e39632806253848efaf04d3c8a8b84
+#ghcr.io/immich-app/immich-server:release
+#ghcr.io/immich-app/immich-machine-learning:release
+#docker.io/valkey/valkey:8-bookworm@sha256:fea8b3e67b15729d4bb70589eb03367bab9ad1ee89c876f54327fc7c6e618571
+#ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:41eacbe83eca995561fe43814fd4891e16e39632806253848efaf04d3c8a8b84
 
 # 下载历史版本的 iOS 应用
-uuphy/ipa-harbor
+#uuphy/ipa-harbor
+# acr-mirror-manager rerun: 2026-06-03 08:58:21Z
