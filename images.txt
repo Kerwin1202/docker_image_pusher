@@ -21,7 +21,7 @@
 #docker.io/library/rust:1-bookworm
 
 #gitlab/gitlab-ee:14.7.3-ee.0
-vaultwarden/server:latest
+#vaultwarden/server:latest
 #caddy:2 
 #mtphotos/mt-photos:latest
 #mtphotos/mt-photos-ai:latest
@@ -48,3 +48,6 @@ vaultwarden/server:latest
 
 
 #neilpang/acme.sh
+
+certimate/certimate:latest
+greper/certd:latest
