@@ -10,6 +10,14 @@
 作者：**[技术爬爬虾](https://github.com/tech-shrimp/me)**<br>
 B站，抖音，Youtube全网同名，转载请注明作者<br>
 
+
+## UI 管理页面
+
+<mark> UI 管理页面 </mark>
+
+https://github.com/Kerwin1202/Acr-Mirror-Manager
+
+
 ## 使用方式
 
 
