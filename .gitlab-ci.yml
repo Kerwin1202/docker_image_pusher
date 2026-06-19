@@ -1,0 +1,56 @@
+variables:
+  GIT_STRATEGY: none
+  SDK_IMAGE: registry.cn-shanghai.aliyuncs.com/kerwin1202/dotnet_sdk:9.0
+  ASPNET_IMAGE: registry.cn-shanghai.aliyuncs.com/kerwin1202/dotnet_aspnet:9.0
+
+# 这是个人 Windows GitLab Runner 部署示例。
+# 合并后仓库根目录是 docker_image_pusher，管理页面在 AcrMirrorManager 子目录。
+
+stages:
+  - deploy
+
+deploy:
+  stage: deploy
+  tags:
+    - local_168
+  only:
+    - main
+  before_script:
+    - $ErrorActionPreference = "Stop"
+    - Write-Host "CI_COMMIT_BRANCH=$env:CI_COMMIT_BRANCH"
+    - Write-Host "CI_COMMIT_REF_NAME=$env:CI_COMMIT_REF_NAME"
+    - Write-Host "CI_COMMIT_REF_PROTECTED=$env:CI_COMMIT_REF_PROTECTED"
+    - Write-Host "ACR_MIRROR_ENV_FILE exists? $(-not [string]::IsNullOrWhiteSpace($env:ACR_MIRROR_ENV_FILE))"
+    - if ([string]::IsNullOrWhiteSpace($env:CI_REPOSITORY_URL)) { throw "CI_REPOSITORY_URL is empty." }
+  script:
+    - $deployPath = "D:\stocks\docker_image_pusher"
+    - $managerPath = Join-Path $deployPath "AcrMirrorManager"
+    - $parentPath = Split-Path $deployPath -Parent
+    - if (-not (Test-Path $parentPath)) { New-Item -ItemType Directory -Path $parentPath -Force | Out-Null }
+    - |
+      if (-not (Test-Path "$deployPath\.git")) {
+        if (Test-Path $deployPath) {
+          $items = Get-ChildItem -LiteralPath $deployPath -Force
+          if ($items.Count -gt 0) { throw "$deployPath exists but is not an empty git repository." }
+        }
+
+        git clone $env:CI_REPOSITORY_URL $deployPath
+      }
+    - cd $deployPath
+    - git fetch origin main
+    - git reset --hard $env:CI_COMMIT_SHA
+    - |
+      if (-not [string]::IsNullOrWhiteSpace($env:ACR_MIRROR_ENV_FILE)) {
+        if (-not (Test-Path $env:ACR_MIRROR_ENV_FILE)) {
+          throw "ACR_MIRROR_ENV_FILE is set, but the file does not exist: $env:ACR_MIRROR_ENV_FILE"
+        }
+
+        Copy-Item -LiteralPath $env:ACR_MIRROR_ENV_FILE -Destination "$managerPath\.env" -Force
+        Write-Host "Wrote .env from ACR_MIRROR_ENV_FILE."
+      }
+
+      if (-not (Test-Path "$managerPath\.env")) {
+        throw ".env is missing in $managerPath. Create it locally or set GitLab File variable ACR_MIRROR_ENV_FILE."
+      }
+    - cd $managerPath
+    - docker-compose up -d --build

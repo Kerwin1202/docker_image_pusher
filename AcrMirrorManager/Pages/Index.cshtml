@@ -1,0 +1,266 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "ACR 镜像管理";
+}
+
+<section class="app-shell">
+    <dialog class="submit-dialog" id="submit-image-dialog">
+        <form method="post" asp-page-handler="SubmitImage" class="submit-card" id="submit-image-form">
+            <div class="dialog-header">
+                <div>
+                    <h3>添加镜像</h3>
+                    <p>写入 GitHub images.txt 后由 Action 推送到阿里云。</p>
+                </div>
+                <button class="icon-button dialog-close" type="button" id="close-submit-dialog" aria-label="关闭">×</button>
+            </div>
+
+            <label asp-for="ImageLine">源镜像地址</label>
+            <textarea asp-for="ImageLine" rows="6" placeholder="docker.io/library/node:20-bookworm-slim&#10;ghcr.io/immich-app/immich-server:release"></textarea>
+            <span asp-validation-for="ImageLine" class="field-error"></span>
+
+            <label class="toggle-row">
+                <input asp-for="CommentOtherImages" />
+                <span>
+                    <strong>只处理本次镜像</strong>
+                    <small>提交时把其它未注释镜像加 #，不删除原内容。</small>
+                </span>
+            </label>
+
+            <button class="primary-button" type="submit">
+                <span class="button-icon">+</span>
+                提交到 GitHub
+            </button>
+        </form>
+    </dialog>
+
+    <main class="workspace">
+        <header class="workspace-header">
+            <div>
+                <h2>阿里云容器镜像</h2>
+                <p>从 images.txt 推导仓库，并通过 Registry V2 确认远端 Tag。</p>
+            </div>
+            <div class="workspace-header-actions">
+                <button class="primary-button compact-button" type="button" id="open-submit-dialog">
+                    <span class="button-icon">+</span>
+                    添加镜像
+                </button>
+                <a class="ghost-button" asp-page="/Index" asp-route-refresh="true" asp-route-statusFilter="@Model.StatusFilter" asp-route-search="@Model.Search">
+                    <span class="button-icon">↻</span>
+                    刷新
+                </a>
+            </div>
+        </header>
+
+        <div id="notice-region">
+            @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+            {
+                <div class="notice success">
+                <span>@Model.SuccessMessage</span>
+                @if (!string.IsNullOrWhiteSpace(Model.CommitUrl))
+                {
+                    <a href="@Model.CommitUrl" target="_blank" rel="noopener noreferrer" data-open-commit>查看 Commit</a>
+                }
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+            {
+                <div class="notice error">@Model.ErrorMessage</div>
+            }
+        </div>
+
+        <form method="post" asp-page-handler="RepullImages" id="repull-form" hidden>
+            @Html.AntiForgeryToken()
+        </form>
+        <form method="post" asp-page-handler="RemoveImage" id="remove-image-form" hidden>
+            @Html.AntiForgeryToken()
+        </form>
+
+        <div class="content-grid">
+            <section class="repo-section">
+                <form method="get" class="toolbar" id="repo-filter-form">
+                    <input type="hidden" name="statusFilter" value="@Model.StatusFilter" />
+                    <div class="search-box">
+                        <span>⌕</span>
+                        <input name="search" value="@Model.Search" placeholder="按仓库名搜索" autocomplete="off" id="repo-search-input" />
+                    </div>
+                    <div class="bulk-actions">
+                        <button type="button" class="secondary-button compact-button" id="select-visible-repos">选择当前</button>
+                        <button type="button" class="secondary-button compact-button" id="repull-visible-button">重 pull 当前</button>
+                        <button type="submit" class="primary-button compact-button" form="repull-form" id="repull-selected-button" disabled>重 pull 选中</button>
+                    </div>
+                </form>
+                <nav class="segment-bar" aria-label="仓库状态过滤" id="status-filter" data-current-filter="@Model.StatusFilter">
+                    <a class="@Model.FilterCss("all")" href="?statusFilter=all" data-filter="all">全部</a>
+                    <a class="@Model.FilterCss("tracking")" href="?statusFilter=tracking" data-filter="tracking">重 pull</a>
+                    <a class="@Model.FilterCss("exists")" href="?statusFilter=exists" data-filter="exists">已存在</a>
+                    <a class="@Model.FilterCss("missing")" href="?statusFilter=missing" data-filter="missing">未推送</a>
+                </nav>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="select-cell">
+                                    <input type="checkbox" id="select-all-repos" aria-label="选择全部可见仓库" />
+                                </th>
+                                <th>仓库</th>
+                                <th>状态</th>
+                                <th>源镜像</th>
+                                <th>目标</th>
+                                <th>操作</th>
+                                @if (Model.SupportsDelete)
+                                {
+                                    <th></th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @if (Model.Repositories.Count == 0)
+                        {
+                            <tr id="empty-repo-row">
+                                <td colspan="@(Model.SupportsDelete ? 7 : 6)" class="empty-cell">暂无仓库，或等待配置 GitHubMirror / RegistryV2 后刷新。</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var repo in Model.Repositories)
+                            {
+                                var rowClass = $"{(repo.RepoId == Model.RepoId ? "is-active" : "")} {(Model.IsRecentMirror(repo) ? "is-tracked" : "")}".Trim();
+                                var statusKey = repo.Status == "已存在" ? "exists" : repo.Status == "未推送" ? "missing" : "other";
+                                var sourceImage = Model.BuildSourceImageAddress(repo);
+                                var summaryParts = repo.Summary.Split(" -> ", 2, StringSplitOptions.None);
+                                var targetImage = summaryParts.Length > 1 ? summaryParts[1] : string.Empty;
+                                <tr class="@rowClass" data-repo-row data-repo-id="@repo.RepoId" data-repo-name="@repo.Name" data-repo-namespace="@repo.Namespace" data-source-image="@sourceImage" data-status="@statusKey" data-status-text="@repo.Status" data-recent-mirror="@Model.IsRecentMirror(repo).ToString().ToLowerInvariant()" data-pending-refresh-count="@repo.PendingRefreshCount" data-search="@($"{repo.Namespace}/{repo.Name} {repo.Summary}")">
+                                    <td class="select-cell">
+                                        <input type="checkbox" form="repull-form" name="SelectedImages" value="@sourceImage" data-repo-select aria-label="选择 @sourceImage" />
+                                    </td>
+                                    <td>
+                                        <a class="repo-link" data-repo-link
+                                           asp-page="/Index"
+                                           asp-route-search="@Model.Search"
+                                           asp-route-statusFilter="@Model.StatusFilter"
+                                           asp-route-repoId="@repo.RepoId"
+                                           asp-route-repoName="@repo.Name"
+                                           asp-route-repoNamespace="@repo.Namespace">
+                                            <strong>@repo.Namespace/@repo.Name</strong>
+                                            <small class="repo-summary">
+                                                <span>@sourceImage</span>
+                                                @if (!string.IsNullOrWhiteSpace(targetImage))
+                                                {
+                                                    <span>@targetImage</span>
+                                                }
+                                            </small>
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="@Model.StatusCss(repo.Status)" data-status-pill>@repo.Status</span>
+                                        <small class="probe-plan" data-workflow-plan>@Model.FormatWorkflowPlan(repo)</small>
+                                        <small class="probe-plan" data-probe-plan>@Model.FormatProbePlan(repo)</small>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="copy-button" data-copy="@sourceImage">复制源</button>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="copy-button" data-copy="@Model.BuildDerivedImageAddress(repo)">复制预估</button>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="copy-button" data-repull-source="@sourceImage">重 pull</button>
+                                        <button type="button" class="copy-button is-danger" data-remove-source="@sourceImage" data-repo-label="@($"{repo.Namespace}/{repo.Name}")">移除</button>
+                                    </td>
+                                    @if (Model.SupportsDelete)
+                                    {
+                                        <td class="table-actions">
+                                            <form method="post"
+                                                  asp-page-handler="DeleteRepository"
+                                                  onsubmit="return confirm('确认删除仓库 @repo.Namespace/@repo.Name 吗？这个操作会删除仓库下所有镜像。');">
+                                                <input type="hidden" name="repoId" value="@repo.RepoId" />
+                                                <input type="hidden" name="repoName" value="@repo.Name" />
+                                                <input type="hidden" name="repoNamespace" value="@repo.Namespace" />
+                                                <button type="submit" class="icon-button" title="删除仓库">×</button>
+                                            </form>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        }
+                        <tr id="filtered-empty-row" hidden>
+                            <td colspan="@(Model.SupportsDelete ? 7 : 6)" class="empty-cell">没有符合条件的仓库。</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <aside class="tag-panel" id="tag-panel">
+                @if (Model.SelectedRepository is null)
+                {
+                    <div class="empty-state">
+                        <h3>未选择仓库</h3>
+                                <p>左侧列表加载后，选择一个仓库查看远端 Tag。</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="tag-panel-header">
+                        <div>
+                            <h3>@Model.SelectedRepository.Name</h3>
+                            <p>@Model.SelectedRepository.Namespace</p>
+                            <p>@Model.FormatWorkflowPlan(Model.SelectedRepository)</p>
+                            <p>@Model.FormatProbePlan(Model.SelectedRepository)</p>
+                        </div>
+                        <div class="tag-panel-actions">
+                            <button type="button" class="copy-button" data-copy="@Model.BuildSourceImageAddress(Model.SelectedRepository)">复制源</button>
+                            <button type="button" class="copy-button" data-repull-source="@Model.BuildSourceImageAddress(Model.SelectedRepository)">重 pull</button>
+                            <button type="button" class="copy-button is-danger" data-remove-source="@Model.BuildSourceImageAddress(Model.SelectedRepository)" data-repo-label="@($"{Model.SelectedRepository.Namespace}/{Model.SelectedRepository.Name}")">移除</button>
+                            @if (!string.IsNullOrWhiteSpace(Model.DefaultCopyAddress))
+                            {
+                                <button type="button" class="copy-button" data-copy="@Model.DefaultCopyAddress">复制默认地址</button>
+                            }
+                            <span>@Model.Tags.Count Tag</span>
+                        </div>
+                    </div>
+
+                    <div class="tag-list">
+                        @if (Model.Tags.Count == 0)
+                        {
+                            <div class="empty-state compact">
+                                <h3>暂无 Tag</h3>
+                                <p>Action 推送完成后刷新页面。</p>
+                            </div>
+                        }
+                        else
+                        {
+                            foreach (var tag in Model.Tags)
+                            {
+                                <article class="tag-row">
+                                    <div>
+                                        <strong>@tag.Tag</strong>
+                                        <small>@tag.Digest</small>
+                                    </div>
+                                    <div class="tag-meta">
+                                        <span class="@Model.StatusCss(tag.Status)">@tag.Status</span>
+                                        <button type="button" class="copy-button" data-copy="@Model.BuildImageAddress(Model.SelectedRepository, tag.Tag)">复制</button>
+                                    </div>
+                                    @if (Model.SupportsDelete)
+                                    {
+                                        <form method="post"
+                                              asp-page-handler="DeleteTag"
+                                              onsubmit="return confirm('确认删除 Tag @tag.Tag 吗？');">
+                                            <input type="hidden" name="repoId" value="@Model.SelectedRepository.RepoId" />
+                                            <input type="hidden" name="repoName" value="@Model.SelectedRepository.Name" />
+                                            <input type="hidden" name="repoNamespace" value="@Model.SelectedRepository.Namespace" />
+                                            <input type="hidden" name="tag" value="@tag.Tag" />
+                                            <button type="submit" class="danger-button">删除 Tag</button>
+                                        </form>
+                                    }
+                                </article>
+                            }
+                        }
+                    </div>
+                }
+            </aside>
+        </div>
+    </main>
+</section>

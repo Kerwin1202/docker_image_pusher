@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  acr-mirror-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SDK_IMAGE: ${SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:9.0}
+        ASPNET_IMAGE: ${ASPNET_IMAGE:-mcr.microsoft.com/dotnet/aspnet:9.0}
+    image: acr-mirror-manager:latest
+    container_name: acr-mirror-manager
+    restart: unless-stopped
+    env_file:
+      - ${ACR_ENV_FILE:-.env}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:15187
+      TZ: Asia/Shanghai
+    ports:
+      - "${APP_HTTP_PORT:-15187}:15187"
+    volumes:
+      - acrmirror-data:/app/App_Data
+
+volumes:
+  acrmirror-data:
