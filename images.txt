@@ -23,7 +23,7 @@
 #gitlab/gitlab-ee:14.7.3-ee.0
 #vaultwarden/server:latest
 #caddy:2 
-#mtphotos/mt-photos:latest
+mtphotos/mt-photos:latest
 #mtphotos/mt-photos-ai:latest
 #luodaoyi/kms-server
 #cooderl/wewe-rss-sqlite
@@ -48,6 +48,6 @@
 
 #neilpang/acme.sh
 
-certimate/certimate:latest
-greper/certd:latest
-# acr-mirror-manager rerun: 2026-06-09 13:12:01Z
+#certimate/certimate:latest
+#greper/certd:latest
+# acr-mirror-manager rerun: 2026-06-19 09:40:04Z
