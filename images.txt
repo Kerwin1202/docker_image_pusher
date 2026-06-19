@@ -8,7 +8,7 @@
 
 #mcr.microsoft.com/dotnet/sdk:9.0
 #mcr.microsoft.com/dotnet/runtime:9.0
-mcr.microsoft.com/dotnet/aspnet:9.0
+#mcr.microsoft.com/dotnet/aspnet:9.0
 
 #gitlab/gitlab-runner-helper:x86_64-6fbc7474 
 #gitlab/gitlab-runner:latest
@@ -18,7 +18,7 @@ mcr.microsoft.com/dotnet/aspnet:9.0
 #docker.io/library/node:20-bookworm-slim
 
 #docker.io/library/debian:bookworm-slim
-#docker.io/library/rust:1-bookworm
+docker.io/library/rust:1-bookworm
 
 #gitlab/gitlab-ee:14.7.3-ee.0
 #vaultwarden/server:latest
@@ -50,4 +50,4 @@ mcr.microsoft.com/dotnet/aspnet:9.0
 
 #certimate/certimate:latest
 #greper/certd:latest
-# acr-mirror-manager rerun: 2026-06-19 11:56:01Z
+# acr-mirror-manager rerun: 2026-06-19 12:02:01Z
