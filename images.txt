@@ -51,6 +51,11 @@
 #certimate/certimate:latest
 #greper/certd:latest
 
-mongo
-redis
-# acr-mirror-manager rerun: 2026-06-23 10:54:45Z
+#mongo
+#redis
+
+mcr.microsoft.com/dotnet/sdk:10.0
+mcr.microsoft.com/dotnet/aspnet:10.0
+mcr.microsoft.com/dotnet/runtime:10.0
+mcr.microsoft.com/dotnet/runtime-deps:10.0
+# acr-mirror-manager rerun: 2026-07-25 15:13:36Z
