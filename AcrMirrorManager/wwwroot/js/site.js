@@ -9,6 +9,12 @@ const openSubmitDialogButton = document.querySelector("#open-submit-dialog");
 const closeSubmitDialogButton = document.querySelector("#close-submit-dialog");
 const repullForm = document.querySelector("#repull-form");
 const removeImageForm = document.querySelector("#remove-image-form");
+const scheduleDialog = document.querySelector("#schedule-image-dialog");
+const closeScheduleDialogButton = document.querySelector("#close-schedule-dialog");
+const scheduledImageInput = document.querySelector("#scheduled-image-input");
+const scheduledImagePreview = document.querySelector("#scheduled-image-preview");
+const disableScheduleForm = document.querySelector("#disable-schedule-form");
+const disableScheduledImageInput = document.querySelector("#disable-scheduled-image-input");
 const repullSelectedButton = document.querySelector("#repull-selected-button");
 const selectVisibleButton = document.querySelector("#select-visible-repos");
 const repullVisibleButton = document.querySelector("#repull-visible-button");
@@ -56,7 +62,8 @@ function applyRepoFilters(pushState = true) {
   for (const row of rows) {
     const matchesStatus = filter === "all"
       || row.dataset.status === filter
-      || (filter === "tracking" && row.dataset.recentMirror === "true");
+      || (filter === "tracking" && row.dataset.recentMirror === "true")
+      || (filter === "scheduled" && row.dataset.scheduled === "true");
     const matchesSearch = !query || (row.dataset.search || "").toLowerCase().includes(query);
     const visible = matchesStatus && matchesSearch;
     row.hidden = !visible;
@@ -146,6 +153,14 @@ function repositorySummaryHtml(summary, sourceImage) {
   return `<small class="repo-summary"><span>${escapeHtml(source)}</span>${targetHtml}</small>`;
 }
 
+function scheduleButtonsHtml(sourceImage, isScheduled) {
+  if (isScheduled) {
+    return `<button type="button" class="copy-button is-danger" data-disable-schedule-source="${escapeHtml(sourceImage)}">取消定时</button>`;
+  }
+
+  return `<button type="button" class="copy-button" data-enable-schedule-source="${escapeHtml(sourceImage)}">加入定时</button>`;
+}
+
 function renderTagPanel(payload) {
   const repo = payload.repository;
   const tags = payload.tags || [];
@@ -176,10 +191,12 @@ function renderTagPanel(payload) {
         <p>${escapeHtml(repo.namespace)}</p>
         <p>${escapeHtml(repo.workflowPlan)}</p>
         <p>${escapeHtml(repo.probePlan)}</p>
+        <p>${escapeHtml(repo.scheduledPlan || "未定时")}</p>
       </div>
       <div class="tag-panel-actions">
         <button type="button" class="copy-button" data-copy="${escapeHtml(sourceImage)}">复制源</button>
         <button type="button" class="copy-button" data-repull-source="${escapeHtml(sourceImage)}">重 pull</button>
+        ${scheduleButtonsHtml(sourceImage, Boolean(repo.isScheduled))}
         <button type="button" class="copy-button is-danger" data-remove-source="${escapeHtml(sourceImage)}" data-repo-label="${escapeHtml(repo.namespace)}/${escapeHtml(repo.name)}">移除</button>
         ${defaultButton}
         <span>${tags.length} Tag</span>
@@ -242,6 +259,10 @@ function upsertRepository(repository) {
   const previousStatus = existing?.dataset.statusText || "";
   const status = statusKey(repository.status);
   const sourceImage = repository.sourceImage || sourceImageFromSummary(repository.summary);
+  const isScheduled = repository.isScheduled === null || repository.isScheduled === undefined
+    ? existing?.dataset.scheduled === "true"
+    : Boolean(repository.isScheduled);
+  const scheduledPlan = repository.scheduledPlan || (isScheduled ? "已加入 GitHub 定时任务" : "未定时");
   const rowHtml = `
     <td class="select-cell">
       <input type="checkbox" form="repull-form" name="SelectedImages" value="${escapeHtml(sourceImage)}" data-repo-select aria-label="选择 ${escapeHtml(sourceImage)}" />
@@ -256,6 +277,10 @@ function upsertRepository(repository) {
       <span class="${escapeHtml(repository.statusClass)}" data-status-pill>${escapeHtml(repository.status)}</span>
       <small class="probe-plan" data-workflow-plan>${escapeHtml(repository.workflowPlan)}</small>
       <small class="probe-plan" data-probe-plan>${escapeHtml(repository.probePlan)}</small>
+    </td>
+    <td data-schedule-cell>
+      <small class="probe-plan" data-schedule-plan>${escapeHtml(scheduledPlan)}</small>
+      ${scheduleButtonsHtml(sourceImage, isScheduled)}
     </td>
     <td><button type="button" class="copy-button" data-copy="${escapeHtml(sourceImage)}">复制源</button></td>
     <td><button type="button" class="copy-button" data-copy="${escapeHtml(repository.copyAddress)}">复制预估</button></td>
@@ -274,6 +299,7 @@ function upsertRepository(repository) {
   row.dataset.status = status;
   row.dataset.statusText = repository.status;
   row.dataset.recentMirror = repository.isRecentMirror ? "true" : "false";
+  row.dataset.scheduled = isScheduled ? "true" : "false";
   row.dataset.pendingRefreshCount = `${repository.pendingRefreshCount ?? 0}`;
   row.dataset.search = `${repository.namespace}/${repository.name} ${repository.summary}`;
   row.innerHTML = rowHtml;
@@ -539,6 +565,37 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
+  const enableScheduleButton = event.target.closest("[data-enable-schedule-source]");
+  if (enableScheduleButton) {
+    event.preventDefault();
+    const sourceImage = enableScheduleButton.getAttribute("data-enable-schedule-source");
+    if (!sourceImage || !scheduleDialog || !scheduledImageInput) {
+      return;
+    }
+
+    scheduledImageInput.value = sourceImage;
+    if (scheduledImagePreview) {
+      scheduledImagePreview.textContent = sourceImage;
+    }
+    scheduleDialog.showModal?.();
+    return;
+  }
+
+  const disableScheduleButton = event.target.closest("[data-disable-schedule-source]");
+  if (disableScheduleButton) {
+    event.preventDefault();
+    const sourceImage = disableScheduleButton.getAttribute("data-disable-schedule-source");
+    if (!sourceImage || !disableScheduleForm || !disableScheduledImageInput) {
+      return;
+    }
+
+    if (window.confirm(`确认取消 ${sourceImage} 的定时重新 pull 吗？`)) {
+      disableScheduledImageInput.value = sourceImage;
+      disableScheduleForm.requestSubmit();
+    }
+    return;
+  }
+
   const button = event.target.closest("[data-copy]");
   if (!button) {
     return;
@@ -635,6 +692,10 @@ closeSubmitDialogButton?.addEventListener("click", () => {
   }
 
   submitDialog?.setAttribute("hidden", "hidden");
+});
+
+closeScheduleDialogButton?.addEventListener("click", () => {
+  scheduleDialog?.close?.();
 });
 
 submitForm?.addEventListener("submit", async (event) => {

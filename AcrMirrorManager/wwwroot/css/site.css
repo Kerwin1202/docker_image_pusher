@@ -342,7 +342,7 @@ textarea:focus {
 
 table {
   width: 100%;
-  min-width: 1180px;
+  min-width: 1380px;
   border-collapse: collapse;
 }
 
@@ -470,6 +470,16 @@ tbody tr.is-fresh {
   line-height: 1.35;
   text-overflow: clip;
   white-space: normal;
+}
+
+.schedule-image-preview {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  overflow-wrap: anywhere;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
 }
 
 .copy-button {

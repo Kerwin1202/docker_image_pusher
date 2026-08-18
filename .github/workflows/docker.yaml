@@ -6,7 +6,13 @@ on:
     branches: [ main ]
     paths:
       - images.txt
+  # GitHub cron 使用 UTC；23:00 UTC 为北京时间次日 07:00。
+  schedule:
+    - cron: '0 23 * * *'
 
+concurrency:
+  group: docker-mirror
+  cancel-in-progress: false
 
 env:
   ALIYUN_REGISTRY: "${{ secrets.ALIYUN_REGISTRY }}"
@@ -20,7 +26,28 @@ jobs:
     name: Pull
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Select image list
+      run: |
+        if [[ "${{ github.event_name }}" == "schedule" ]]; then
+          image_file="scheduled-images.txt"
+        else
+          image_file="images.txt"
+        fi
+
+        echo "IMAGES_FILE=$image_file" >> "$GITHUB_ENV"
+        if awk 'NF && $1 !~ /^#/' "$image_file" | grep -q .; then
+          echo "HAS_IMAGES=true" >> "$GITHUB_ENV"
+          echo "Using $image_file"
+        else
+          echo "HAS_IMAGES=false" >> "$GITHUB_ENV"
+          echo "$image_file has no enabled images; nothing to do."
+        fi
+
     - name: Before freeing up disk space
+      if: env.HAS_IMAGES == 'true'
       run: |
         echo "Before freeing up disk space"
         echo "=============================================================================="
@@ -29,6 +56,7 @@ jobs:
 
     # 增加可用磁盘空间
     - name: Maximize build space
+      if: env.HAS_IMAGES == 'true'
       uses: easimon/maximize-build-space@master
       with:
 
@@ -42,22 +70,23 @@ jobs:
         build-mount-path: '/var/lib/docker/'
 
     - name: Restart docker
+      if: env.HAS_IMAGES == 'true'
       run: sudo service docker restart
 
     - name: Free up disk space complete
+      if: env.HAS_IMAGES == 'true'
       run: |
         echo "Free up disk space complete"
         echo "=============================================================================="
         df -hT
         echo "=============================================================================="
 
-    - name: Checkout Code
-      uses: actions/checkout@v4
-
     - name: Docker Setup Buildx
+      if: env.HAS_IMAGES == 'true'
       uses: docker/setup-buildx-action@v3
 
     - name: Build and push image Aliyun
+      if: env.HAS_IMAGES == 'true'
       run: |
         docker login -u $ALIYUN_REGISTRY_USER -p $ALIYUN_REGISTRY_PASSWORD $ALIYUN_REGISTRY
 
@@ -126,4 +155,4 @@ jobs:
             df -hT
             echo "=============================================================================="
 
-        done < images.txt
+        done < "$IMAGES_FILE"

@@ -15,7 +15,8 @@ B 站、抖音、Youtube 全网同名，转载请注明作者。
 ## 仓库结构
 
 - `images.txt`：要同步的镜像列表。
-- `.github/workflows/docker.yaml`：读取 `images.txt`，拉取源镜像并推送到阿里云 ACR。
+- `scheduled-images.txt`：只保存需要定时重新 pull 的镜像。
+- `.github/workflows/docker.yaml`：按触发类型读取普通或定时镜像列表，拉取源镜像并推送到阿里云 ACR。
 - `AcrMirrorManager/`：内置的 .NET 9 Razor Pages 管理页面。
 - `doc/`：使用说明图片和管理页面截图。
 
@@ -24,7 +25,7 @@ B 站、抖音、Youtube 全网同名，转载请注明作者。
 ## 工作流程
 
 1. 在 `images.txt` 手动添加镜像，或在 ACR Mirror Manager 页面提交镜像。
-2. `images.txt` 变更后，GitHub Actions 自动运行。
+2. `images.txt` 变更后，GitHub Actions 自动运行；到达定时时间时则只读取 `scheduled-images.txt`。
 3. workflow 拉取源镜像，按规则生成阿里云 ACR 仓库名。
 4. workflow 将镜像推送到阿里云 ACR。
 5. 管理页面通过 Registry V2 API 检查仓库和 Tag 是否已经存在。
@@ -111,6 +112,7 @@ ACR Mirror Manager 是内置的网页管理页面，代码在 `AcrMirrorManager/
 - 在网页提交一个或多个源镜像，自动写入 `images.txt`。
 - 支持“只处理本次镜像”：提交时把其它未注释镜像加 `#`。
 - 支持重 pull 已有镜像，让 GitHub Actions 重新处理选中的源镜像。
+- 支持把指定镜像加入或移出 GitHub Actions 定时重新 pull 列表。
 - 支持从 `images.txt` 移除源镜像，并同步更新本地缓存。
 - 通过 Docker Registry HTTP API V2 查询阿里云 ACR 仓库和 Tag。
 - 展示镜像状态、Tag、Digest、源镜像地址和目标镜像地址。
@@ -143,7 +145,7 @@ GitHubMirror__RepositoryUrl=https://github.com/你的账号/docker_image_pusher
 
 这个配置仍然需要存在，因为管理页面要通过 GitHub API 读写这个仓库的 `images.txt`。它现在指向的是合并后的同一个仓库，不再是另一个配套项目。
 
-`GitHubMirror__Token` 用于读写 `images.txt`。如果使用 GitHub fine-grained token，建议授予：
+`GitHubMirror__Token` 用于读写 `images.txt` 和 `scheduled-images.txt`。如果使用 GitHub fine-grained token，建议授予：
 
 - Repository access：当前 `docker_image_pusher` 仓库，或你 fork 后的仓库。
 - Contents：Read and write。
@@ -275,7 +277,23 @@ xiaoyaliu/alist
 
 ## 定时执行
 
-如果需要定时同步，可以修改 `.github/workflows/docker.yaml`，添加 `schedule`。cron 使用 UTC 时区。
+定时重新 pull 由 GitHub Actions 执行，不依赖 ACR Mirror Manager 容器一直在线。
+
+使用方式：
+
+1. 打开管理页面，在镜像所在行点击“加入定时”。
+2. 页面把该源镜像写入根目录的 `scheduled-images.txt`。
+3. GitHub Actions 到达定时时间后只处理这个文件中的镜像，不会重新 pull `images.txt` 中的全部镜像。
+4. 点击“取消定时”，或从管理页面移除镜像，会同时把它移出定时列表。
+
+当前 `.github/workflows/docker.yaml` 默认每天 `23:00 UTC` 执行，也就是北京时间次日 `07:00` 左右。要修改频率，只需调整 workflow 中的 cron：
+
+```yaml
+schedule:
+  - cron: '0 23 * * *'
+```
+
+cron 使用 UTC 时区。修改 `scheduled-images.txt` 本身不会立即触发同步；手动“重 pull”仍走 `images.txt` 的即时 push 触发。定时列表为空时，workflow 会跳过 Docker 初始化和镜像处理。
 
 ![](doc/定时执行.png)
 

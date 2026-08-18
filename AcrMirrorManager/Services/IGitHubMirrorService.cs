@@ -21,4 +21,11 @@ public interface IGitHubMirrorService
         CancellationToken cancellationToken);
 
     Task<GitHubWorkflowRun?> GetWorkflowRunForCommitAsync(string commitSha, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<string>> ListScheduledImagesAsync(CancellationToken cancellationToken);
+
+    Task<ScheduledImageUpdateResult> SetScheduledImageAsync(
+        string imageLine,
+        bool enabled,
+        CancellationToken cancellationToken);
 }

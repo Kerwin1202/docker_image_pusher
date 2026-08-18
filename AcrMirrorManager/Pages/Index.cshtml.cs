@@ -15,6 +15,7 @@ public class IndexModel : PageModel
     private readonly IGitHubMirrorService _gitHubMirror;
     private readonly IRegistryV2RefreshService _registryRefresh;
     private readonly GitHubMirrorOptions _gitHubOptions;
+    private bool _scheduledImagesLoaded;
 
     public IndexModel(
         IAcrRegistryService acrRegistry,
@@ -55,11 +56,16 @@ public class IndexModel : PageModel
     [BindProperty]
     public List<string> SelectedImages { get; set; } = [];
 
+    [BindProperty]
+    public string ScheduledImage { get; set; } = string.Empty;
+
     public IReadOnlyList<AcrRepository> Repositories { get; private set; } = [];
 
     public IReadOnlyList<AcrTag> Tags { get; private set; } = [];
 
     public AcrRepository? SelectedRepository { get; private set; }
+
+    public IReadOnlyList<string> ScheduledImages { get; private set; } = [];
 
     public bool SupportsDelete => _acrRegistry.SupportsDelete;
 
@@ -270,10 +276,13 @@ public class IndexModel : PageModel
 
         try
         {
+            var scheduledResult = await _gitHubMirror.SetScheduledImageAsync(sourceImage, enabled: false, cancellationToken);
             await _registryRefresh.RemoveTrackedImageAsync(sourceImage, cancellationToken);
 
-            SuccessMessage = $"已从本地列表移除 {sourceImage}。下次提交镜像时会一并从 GitHub images.txt 移除。";
-            CommitUrl = null;
+            SuccessMessage = scheduledResult.Changed
+                ? $"已取消定时并从本地列表移除 {sourceImage}。下次提交镜像时会一并从 GitHub images.txt 移除。"
+                : $"已从本地列表移除 {sourceImage}。下次提交镜像时会一并从 GitHub images.txt 移除。";
+            CommitUrl = scheduledResult.CommitUrl;
 
             if (IsAjaxRequest())
             {
@@ -281,7 +290,7 @@ public class IndexModel : PageModel
                 {
                     ok = true,
                     message = SuccessMessage,
-                    commitUrl = (string?)null,
+                    commitUrl = CommitUrl,
                     sourceImage,
                     repoId = ImageNameMapper.ToAliyunRepositoryName(sourceImage)
                 });
@@ -303,9 +312,64 @@ public class IndexModel : PageModel
         return RedirectToPage(new { search = Search, statusFilter = StatusFilter });
     }
 
+    public async Task<IActionResult> OnPostEnableScheduledImageAsync(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(ScheduledImage))
+        {
+            ErrorMessage = "请先选择要定时重新 pull 的源镜像。";
+            await LoadAsync(cancellationToken);
+            return Page();
+        }
+
+        try
+        {
+            var result = await _gitHubMirror.SetScheduledImageAsync(ScheduledImage, enabled: true, cancellationToken);
+            SuccessMessage = result.Changed
+                ? $"已将 {result.SourceImage} 加入定时重新 pull 列表。"
+                : $"{result.SourceImage} 已在定时重新 pull 列表中。";
+            CommitUrl = result.CommitUrl;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadAsync(cancellationToken);
+            return Page();
+        }
+
+        return RedirectToPage(new { search = Search, statusFilter = StatusFilter, repoId = RepoId });
+    }
+
+    public async Task<IActionResult> OnPostDisableScheduledImageAsync(CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(ScheduledImage))
+        {
+            ErrorMessage = "请先选择要取消定时的源镜像。";
+            await LoadAsync(cancellationToken);
+            return Page();
+        }
+
+        try
+        {
+            var result = await _gitHubMirror.SetScheduledImageAsync(ScheduledImage, enabled: false, cancellationToken);
+            SuccessMessage = result.Changed
+                ? $"已取消 {result.SourceImage} 的定时重新 pull。"
+                : $"{result.SourceImage} 当前没有定时任务。";
+            CommitUrl = result.CommitUrl;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadAsync(cancellationToken);
+            return Page();
+        }
+
+        return RedirectToPage(new { search = Search, statusFilter = StatusFilter, repoId = RepoId });
+    }
+
 
     public async Task<IActionResult> OnGetTagsAsync(string repoId, bool refresh, CancellationToken cancellationToken)
     {
+        await LoadScheduledImagesAsync(cancellationToken);
         var repositories = await _acrRegistry.ListRepositoriesAsync(null, false, cancellationToken);
         var repository = repositories.FirstOrDefault(x => x.RepoId.Equals(repoId, StringComparison.OrdinalIgnoreCase));
         if (repository is null)
@@ -453,6 +517,17 @@ public class IndexModel : PageModel
         return !finishedAt.HasValue || DateTimeOffset.Now - finishedAt.Value <= RecentMirrorWindow;
     }
 
+    public bool IsScheduled(AcrRepository repository)
+    {
+        var sourceImage = BuildSourceImageAddress(repository);
+        return ScheduledImages.Any(x => x.Equals(sourceImage, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public string FormatScheduledPlan(AcrRepository repository)
+    {
+        return IsScheduled(repository) ? "已加入 GitHub 定时任务" : "未定时";
+    }
+
     public string FormatSize(long? bytes)
     {
         if (!bytes.HasValue)
@@ -524,6 +599,7 @@ public class IndexModel : PageModel
     {
         try
         {
+            await LoadScheduledImagesAsync(cancellationToken);
             var repositories = await _acrRegistry.ListRepositoriesAsync(null, Refresh, cancellationToken);
             Repositories = repositories;
 
@@ -542,6 +618,12 @@ public class IndexModel : PageModel
         {
             ErrorMessage ??= ex.Message;
         }
+    }
+
+    private async Task LoadScheduledImagesAsync(CancellationToken cancellationToken)
+    {
+        ScheduledImages = await _gitHubMirror.ListScheduledImagesAsync(cancellationToken);
+        _scheduledImagesLoaded = true;
     }
 
     private static string ShortSha(string sha)
@@ -568,6 +650,7 @@ public class IndexModel : PageModel
 
     private object ToRepositoryDto(AcrRepository repository)
     {
+        var isScheduled = _scheduledImagesLoaded ? IsScheduled(repository) : (bool?)null;
         return new
         {
             repoId = repository.RepoId,
@@ -580,6 +663,8 @@ public class IndexModel : PageModel
             workflowUrl = repository.LastWorkflowUrl,
             mirrorCommitUrl = repository.LastMirrorCommitUrl,
             isRecentMirror = IsRecentMirror(repository),
+            isScheduled,
+            scheduledPlan = isScheduled == true ? "已加入 GitHub 定时任务" : isScheduled == false ? "未定时" : null,
             nextRefreshAt = repository.NextRefreshAt,
             pendingRefreshCount = repository.PendingRefreshCount,
             summary = repository.Summary,

@@ -9,6 +9,7 @@ builder.Services.Configure<AliyunAcrOptions>(builder.Configuration.GetSection("A
 builder.Services.Configure<RegistryV2Options>(builder.Configuration.GetSection("RegistryV2"));
 builder.Services.Configure<GitHubMirrorOptions>(builder.Configuration.GetSection("GitHubMirror"));
 builder.Services.AddSingleton<RegistryV2PersistentCache>();
+builder.Services.AddSingleton<GitHubMutationLock>();
 builder.Services.AddSingleton<AliyunAcrRegistryService>();
 builder.Services.AddHttpClient<RegistryV2AcrRegistryService>();
 builder.Services.AddTransient<IRegistryV2RefreshService>(services => services.GetRequiredService<RegistryV2AcrRegistryService>());

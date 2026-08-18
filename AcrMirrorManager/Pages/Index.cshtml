@@ -34,6 +34,24 @@
         </form>
     </dialog>
 
+    <dialog class="submit-dialog" id="schedule-image-dialog">
+        <form method="post" asp-page-handler="EnableScheduledImage" class="submit-card" id="schedule-image-form">
+            <div class="dialog-header">
+                <div>
+                    <h3>加入定时重新 pull</h3>
+                    <p>只会处理加入定时列表的镜像，不会重新 pull 全部镜像。</p>
+                </div>
+                <button class="icon-button dialog-close" type="button" id="close-schedule-dialog" aria-label="关闭">×</button>
+            </div>
+
+            <input asp-for="ScheduledImage" type="hidden" id="scheduled-image-input" />
+            <div class="schedule-image-preview" id="scheduled-image-preview"></div>
+            <p>GitHub Actions 默认每天北京时间 07:00 左右读取 <code>scheduled-images.txt</code>；频率可在 <code>.github/workflows/docker.yaml</code> 中调整。</p>
+
+            <button class="primary-button" type="submit">确认加入定时</button>
+        </form>
+    </dialog>
+
     <main class="workspace">
         <header class="workspace-header">
             <div>
@@ -76,6 +94,10 @@
         <form method="post" asp-page-handler="RemoveImage" id="remove-image-form" hidden>
             @Html.AntiForgeryToken()
         </form>
+        <form method="post" asp-page-handler="DisableScheduledImage" id="disable-schedule-form" hidden>
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ScheduledImage" id="disable-scheduled-image-input" />
+        </form>
 
         <div class="content-grid">
             <section class="repo-section">
@@ -94,6 +116,7 @@
                 <nav class="segment-bar" aria-label="仓库状态过滤" id="status-filter" data-current-filter="@Model.StatusFilter">
                     <a class="@Model.FilterCss("all")" href="?statusFilter=all" data-filter="all">全部</a>
                     <a class="@Model.FilterCss("tracking")" href="?statusFilter=tracking" data-filter="tracking">重 pull</a>
+                    <a class="@Model.FilterCss("scheduled")" href="?statusFilter=scheduled" data-filter="scheduled">已定时</a>
                     <a class="@Model.FilterCss("exists")" href="?statusFilter=exists" data-filter="exists">已存在</a>
                     <a class="@Model.FilterCss("missing")" href="?statusFilter=missing" data-filter="missing">未推送</a>
                 </nav>
@@ -107,6 +130,7 @@
                                 </th>
                                 <th>仓库</th>
                                 <th>状态</th>
+                                <th>定时重新 pull</th>
                                 <th>源镜像</th>
                                 <th>目标</th>
                                 <th>操作</th>
@@ -120,7 +144,7 @@
                         @if (Model.Repositories.Count == 0)
                         {
                             <tr id="empty-repo-row">
-                                <td colspan="@(Model.SupportsDelete ? 7 : 6)" class="empty-cell">暂无仓库，或等待配置 GitHubMirror / RegistryV2 后刷新。</td>
+                                <td colspan="@(Model.SupportsDelete ? 8 : 7)" class="empty-cell">暂无仓库，或等待配置 GitHubMirror / RegistryV2 后刷新。</td>
                             </tr>
                         }
                         else
@@ -132,7 +156,7 @@
                                 var sourceImage = Model.BuildSourceImageAddress(repo);
                                 var summaryParts = repo.Summary.Split(" -> ", 2, StringSplitOptions.None);
                                 var targetImage = summaryParts.Length > 1 ? summaryParts[1] : string.Empty;
-                                <tr class="@rowClass" data-repo-row data-repo-id="@repo.RepoId" data-repo-name="@repo.Name" data-repo-namespace="@repo.Namespace" data-source-image="@sourceImage" data-status="@statusKey" data-status-text="@repo.Status" data-recent-mirror="@Model.IsRecentMirror(repo).ToString().ToLowerInvariant()" data-pending-refresh-count="@repo.PendingRefreshCount" data-search="@($"{repo.Namespace}/{repo.Name} {repo.Summary}")">
+                                <tr class="@rowClass" data-repo-row data-repo-id="@repo.RepoId" data-repo-name="@repo.Name" data-repo-namespace="@repo.Namespace" data-source-image="@sourceImage" data-status="@statusKey" data-status-text="@repo.Status" data-recent-mirror="@Model.IsRecentMirror(repo).ToString().ToLowerInvariant()" data-scheduled="@Model.IsScheduled(repo).ToString().ToLowerInvariant()" data-pending-refresh-count="@repo.PendingRefreshCount" data-search="@($"{repo.Namespace}/{repo.Name} {repo.Summary}")">
                                     <td class="select-cell">
                                         <input type="checkbox" form="repull-form" name="SelectedImages" value="@sourceImage" data-repo-select aria-label="选择 @sourceImage" />
                                     </td>
@@ -158,6 +182,17 @@
                                         <span class="@Model.StatusCss(repo.Status)" data-status-pill>@repo.Status</span>
                                         <small class="probe-plan" data-workflow-plan>@Model.FormatWorkflowPlan(repo)</small>
                                         <small class="probe-plan" data-probe-plan>@Model.FormatProbePlan(repo)</small>
+                                    </td>
+                                    <td data-schedule-cell>
+                                        <small class="probe-plan" data-schedule-plan>@Model.FormatScheduledPlan(repo)</small>
+                                        @if (Model.IsScheduled(repo))
+                                        {
+                                            <button type="button" class="copy-button is-danger" data-disable-schedule-source="@sourceImage">取消定时</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="copy-button" data-enable-schedule-source="@sourceImage">加入定时</button>
+                                        }
                                     </td>
                                     <td>
                                         <button type="button" class="copy-button" data-copy="@sourceImage">复制源</button>
@@ -186,7 +221,7 @@
                             }
                         }
                         <tr id="filtered-empty-row" hidden>
-                            <td colspan="@(Model.SupportsDelete ? 7 : 6)" class="empty-cell">没有符合条件的仓库。</td>
+                            <td colspan="@(Model.SupportsDelete ? 8 : 7)" class="empty-cell">没有符合条件的仓库。</td>
                         </tr>
                         </tbody>
                     </table>
@@ -209,10 +244,19 @@
                             <p>@Model.SelectedRepository.Namespace</p>
                             <p>@Model.FormatWorkflowPlan(Model.SelectedRepository)</p>
                             <p>@Model.FormatProbePlan(Model.SelectedRepository)</p>
+                            <p>@Model.FormatScheduledPlan(Model.SelectedRepository)</p>
                         </div>
                         <div class="tag-panel-actions">
                             <button type="button" class="copy-button" data-copy="@Model.BuildSourceImageAddress(Model.SelectedRepository)">复制源</button>
                             <button type="button" class="copy-button" data-repull-source="@Model.BuildSourceImageAddress(Model.SelectedRepository)">重 pull</button>
+                            @if (Model.IsScheduled(Model.SelectedRepository))
+                            {
+                                <button type="button" class="copy-button is-danger" data-disable-schedule-source="@Model.BuildSourceImageAddress(Model.SelectedRepository)">取消定时</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="copy-button" data-enable-schedule-source="@Model.BuildSourceImageAddress(Model.SelectedRepository)">加入定时</button>
+                            }
                             <button type="button" class="copy-button is-danger" data-remove-source="@Model.BuildSourceImageAddress(Model.SelectedRepository)" data-repo-label="@($"{Model.SelectedRepository.Namespace}/{Model.SelectedRepository.Name}")">移除</button>
                             @if (!string.IsNullOrWhiteSpace(Model.DefaultCopyAddress))
                             {

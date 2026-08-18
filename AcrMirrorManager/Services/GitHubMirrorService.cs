@@ -15,11 +15,16 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
 
     private readonly HttpClient _httpClient;
     private readonly GitHubMirrorOptions _options;
+    private readonly GitHubMutationLock _mutationLock;
 
-    public GitHubMirrorService(HttpClient httpClient, IOptions<GitHubMirrorOptions> options)
+    public GitHubMirrorService(
+        HttpClient httpClient,
+        IOptions<GitHubMirrorOptions> options,
+        GitHubMutationLock mutationLock)
     {
         _httpClient = httpClient;
         _options = options.Value;
+        _mutationLock = mutationLock;
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("AcrMirrorManager/1.0");
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         _httpClient.DefaultRequestHeaders.Remove("X-GitHub-Api-Version");
@@ -38,26 +43,33 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
         CancellationToken cancellationToken)
     {
         EnsureConfigured();
-
-        var normalizedImage = NormalizeImageLine(imageLine);
-        var file = await GetImagesFileAsync(cancellationToken);
-        var updatedContent = UpdateImagesFile(file.Content, [normalizedImage], removeImageLines, commentOtherImages, forceRerunMarker: false);
-        var commit = await PutImagesFileAsync(file, updatedContent, normalizedImage, cancellationToken);
-        var workflowDispatchRequested = false;
-
-        if (_options.TriggerWorkflowDispatch)
+        await _mutationLock.WaitAsync(cancellationToken);
+        try
         {
-            await DispatchWorkflowAsync(cancellationToken);
-            workflowDispatchRequested = true;
-        }
+            var normalizedImage = NormalizeImageLine(imageLine);
+            var file = await GetImagesFileAsync(cancellationToken);
+            var updatedContent = UpdateImagesFile(file.Content, [normalizedImage], removeImageLines, commentOtherImages, forceRerunMarker: false);
+            var commit = await PutImagesFileAsync(file, updatedContent, normalizedImage, cancellationToken);
+            var workflowDispatchRequested = false;
 
-        return new MirrorSubmissionResult(
-            normalizedImage,
-            ImageNameMapper.ToAliyunRepositoryName(normalizedImage),
-            _options.Branch,
-            commit.Commit.Sha,
-            commit.Commit.HtmlUrl,
-            workflowDispatchRequested);
+            if (_options.TriggerWorkflowDispatch)
+            {
+                await DispatchWorkflowAsync(cancellationToken);
+                workflowDispatchRequested = true;
+            }
+
+            return new MirrorSubmissionResult(
+                normalizedImage,
+                ImageNameMapper.ToAliyunRepositoryName(normalizedImage),
+                _options.Branch,
+                commit.Commit.Sha,
+                commit.Commit.HtmlUrl,
+                workflowDispatchRequested);
+        }
+        finally
+        {
+            _mutationLock.Release();
+        }
     }
 
     public async Task<MirrorBatchSubmissionResult> SubmitImagesAsync(
@@ -75,35 +87,111 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
         CancellationToken cancellationToken)
     {
         EnsureConfigured();
+        await _mutationLock.WaitAsync(cancellationToken);
+        try
+        {
+            var normalizedImages = imageLines
+                .Select(NormalizeImageLine)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-        var normalizedImages = imageLines
-            .Select(NormalizeImageLine)
+            if (normalizedImages.Count == 0)
+            {
+                throw new ArgumentException("镜像地址不能为空。", nameof(imageLines));
+            }
+
+            var file = await GetImagesFileAsync(cancellationToken);
+            var updatedContent = UpdateImagesFile(file.Content, normalizedImages, removeImageLines, commentOtherImages, forceRerunMarker: true);
+            var commit = await PutImagesFileAsync(file, updatedContent, $"{normalizedImages.Count} images", cancellationToken);
+            var workflowDispatchRequested = false;
+
+            if (_options.TriggerWorkflowDispatch)
+            {
+                await DispatchWorkflowAsync(cancellationToken);
+                workflowDispatchRequested = true;
+            }
+
+            return new MirrorBatchSubmissionResult(
+                normalizedImages,
+                normalizedImages.Select(ImageNameMapper.ToAliyunRepositoryName).ToList(),
+                _options.Branch,
+                commit.Commit.Sha,
+                commit.Commit.HtmlUrl,
+                workflowDispatchRequested);
+        }
+        finally
+        {
+            _mutationLock.Release();
+        }
+    }
+
+    public async Task<IReadOnlyList<string>> ListScheduledImagesAsync(CancellationToken cancellationToken)
+    {
+        EnsureConfigured();
+        var file = await GetScheduledImagesFileAsync(cancellationToken);
+        return file.Content
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal)
+            .Split('\n')
+            .Where(IsEnabledImageLine)
+            .Select(static x => x.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
 
-        if (normalizedImages.Count == 0)
+    public async Task<ScheduledImageUpdateResult> SetScheduledImageAsync(
+        string imageLine,
+        bool enabled,
+        CancellationToken cancellationToken)
+    {
+        EnsureConfigured();
+        var normalizedImage = NormalizeImageLine(imageLine);
+
+        await _mutationLock.WaitAsync(cancellationToken);
+        try
         {
-            throw new ArgumentException("镜像地址不能为空。", nameof(imageLines));
+            var file = await GetScheduledImagesFileAsync(cancellationToken);
+            var currentImages = file.Content
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace("\r", "\n", StringComparison.Ordinal)
+                .Split('\n')
+                .Where(IsEnabledImageLine)
+                .Select(static x => x.Trim())
+                .ToList();
+            var currentlyEnabled = currentImages.Any(x => ImageEquals(x, normalizedImage));
+
+            if (currentlyEnabled == enabled)
+            {
+                return new ScheduledImageUpdateResult(
+                    normalizedImage,
+                    enabled,
+                    Changed: false,
+                    _options.Branch,
+                    null,
+                    null);
+            }
+
+            var updatedContent = UpdateScheduledImagesFile(file.Content, normalizedImage, enabled);
+            var action = enabled ? "enable" : "disable";
+            var commit = await PutContentFileAsync(
+                _options.ScheduledImagesPath,
+                file,
+                updatedContent,
+                $"mirror: {action} scheduled pull {normalizedImage}",
+                cancellationToken);
+
+            return new ScheduledImageUpdateResult(
+                normalizedImage,
+                enabled,
+                Changed: true,
+                _options.Branch,
+                commit.Commit.Sha,
+                commit.Commit.HtmlUrl);
         }
-
-        var file = await GetImagesFileAsync(cancellationToken);
-        var updatedContent = UpdateImagesFile(file.Content, normalizedImages, removeImageLines, commentOtherImages, forceRerunMarker: true);
-        var commit = await PutImagesFileAsync(file, updatedContent, $"{normalizedImages.Count} images", cancellationToken);
-        var workflowDispatchRequested = false;
-
-        if (_options.TriggerWorkflowDispatch)
+        finally
         {
-            await DispatchWorkflowAsync(cancellationToken);
-            workflowDispatchRequested = true;
+            _mutationLock.Release();
         }
-
-        return new MirrorBatchSubmissionResult(
-            normalizedImages,
-            normalizedImages.Select(ImageNameMapper.ToAliyunRepositoryName).ToList(),
-            _options.Branch,
-            commit.Commit.Sha,
-            commit.Commit.HtmlUrl,
-            workflowDispatchRequested);
     }
 
     public async Task<GitHubWorkflowRun?> GetWorkflowRunForCommitAsync(string commitSha, CancellationToken cancellationToken)
@@ -171,19 +259,63 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
             Encoding.UTF8.GetString(Convert.FromBase64String(normalizedBase64)));
     }
 
+    private async Task<GitHubContentFile> GetScheduledImagesFileAsync(CancellationToken cancellationToken)
+    {
+        using var request = CreateRequest(HttpMethod.Get, ContentsUri(_options.ScheduledImagesPath));
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return new GitHubContentFile(
+                null,
+                "# 这里只放需要由 GitHub Actions 定时重新 pull 的镜像。\n"
+                + "# 请通过 ACR Mirror Manager 页面管理，或直接按 images.txt 的相同格式编辑。\n");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"读取 GitHub {_options.ScheduledImagesPath} 失败：{(int)response.StatusCode} {body}");
+        }
+
+        var file = JsonSerializer.Deserialize<GitHubContentResponse>(body, JsonOptions)
+            ?? throw new InvalidOperationException($"GitHub 返回的 {_options.ScheduledImagesPath} 内容为空。");
+        var normalizedBase64 = file.Content.Replace("\n", string.Empty, StringComparison.Ordinal)
+            .Replace("\r", string.Empty, StringComparison.Ordinal);
+
+        return new GitHubContentFile(
+            file.Sha,
+            Encoding.UTF8.GetString(Convert.FromBase64String(normalizedBase64)));
+    }
+
     private async Task<GitHubPutContentResponse> PutImagesFileAsync(
         GitHubContentFile currentFile,
         string updatedContent,
         string imageLine,
         CancellationToken cancellationToken)
     {
-        var payload = new GitHubPutContentRequest(
+        return await PutContentFileAsync(
+            _options.ImagesPath,
+            currentFile,
+            updatedContent,
             $"mirror: request {imageLine}",
+            cancellationToken);
+    }
+
+    private async Task<GitHubPutContentResponse> PutContentFileAsync(
+        string path,
+        GitHubContentFile currentFile,
+        string updatedContent,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        var payload = new GitHubPutContentRequest(
+            message,
             Convert.ToBase64String(Encoding.UTF8.GetBytes(updatedContent)),
             currentFile.Sha,
             _options.Branch);
 
-        using var request = CreateRequest(HttpMethod.Put, ContentsUri());
+        using var request = CreateRequest(HttpMethod.Put, ContentsUri(path));
         request.Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -191,7 +323,7 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException($"更新 GitHub images.txt 失败：{(int)response.StatusCode} {body}");
+            throw new InvalidOperationException($"更新 GitHub {path} 失败：{(int)response.StatusCode} {body}");
         }
 
         return JsonSerializer.Deserialize<GitHubPutContentResponse>(body, JsonOptions)
@@ -224,7 +356,12 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
 
     private string ContentsUri()
     {
-        var escapedPath = string.Join('/', _options.ImagesPath.Split('/').Select(Uri.EscapeDataString));
+        return ContentsUri(_options.ImagesPath);
+    }
+
+    private string ContentsUri(string path)
+    {
+        var escapedPath = string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
         return $"repos/{_options.EffectiveOwner}/{_options.EffectiveRepository}/contents/{escapedPath}?ref={Uri.EscapeDataString(_options.Branch)}";
     }
 
@@ -234,6 +371,7 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
             || string.IsNullOrWhiteSpace(_options.EffectiveRepository)
             || string.IsNullOrWhiteSpace(_options.Branch)
             || string.IsNullOrWhiteSpace(_options.ImagesPath)
+            || string.IsNullOrWhiteSpace(_options.ScheduledImagesPath)
             || string.IsNullOrWhiteSpace(_options.Token))
         {
             throw new InvalidOperationException("请先配置 GitHubMirror:RepositoryUrl 和 Token。");
@@ -319,6 +457,37 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
         return hadTrailingNewline || output.Length > 0 ? output + "\n" : output;
     }
 
+    private static string UpdateScheduledImagesFile(string currentContent, string imageLine, bool enabled)
+    {
+        var normalized = currentContent.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal);
+        var lines = normalized.Split('\n').ToList();
+
+        if (lines.Count > 0 && lines[^1].Length == 0)
+        {
+            lines.RemoveAt(lines.Count - 1);
+        }
+
+        var insertAt = lines.Count;
+        for (var i = lines.Count - 1; i >= 0; i--)
+        {
+            if (!ImageEquals(Uncomment(lines[i]), imageLine))
+            {
+                continue;
+            }
+
+            insertAt = i;
+            lines.RemoveAt(i);
+        }
+
+        if (enabled)
+        {
+            lines.Insert(insertAt, imageLine);
+        }
+
+        return string.Join('\n', lines) + "\n";
+    }
+
     private static string NormalizeImageLine(string imageLine)
     {
         var normalized = imageLine.Trim();
@@ -357,7 +526,7 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
         return string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
-    private sealed record GitHubContentFile(string Sha, string Content);
+    private sealed record GitHubContentFile(string? Sha, string Content);
 
     private sealed record GitHubContentResponse(
         string Sha,
@@ -366,7 +535,7 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
     private sealed record GitHubPutContentRequest(
         string Message,
         string Content,
-        string Sha,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Sha,
         string Branch);
 
     private sealed record GitHubPutContentResponse(

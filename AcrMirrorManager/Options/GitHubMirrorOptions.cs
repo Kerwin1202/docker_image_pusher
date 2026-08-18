@@ -12,6 +12,8 @@ public sealed class GitHubMirrorOptions
 
     public string ImagesPath { get; set; } = "images.txt";
 
+    public string ScheduledImagesPath { get; set; } = "scheduled-images.txt";
+
     public string WorkflowFile { get; set; } = "docker.yaml";
 
     public string Token { get; set; } = string.Empty;
