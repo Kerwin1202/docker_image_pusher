@@ -15,6 +15,8 @@ const scheduledImageInput = document.querySelector("#scheduled-image-input");
 const scheduledImagePreview = document.querySelector("#scheduled-image-preview");
 const disableScheduleForm = document.querySelector("#disable-schedule-form");
 const disableScheduledImageInput = document.querySelector("#disable-scheduled-image-input");
+const enableSchedulesForm = document.querySelector("#enable-schedules-form");
+const scheduleSelectedButton = document.querySelector("#schedule-selected-button");
 const repullSelectedButton = document.querySelector("#repull-selected-button");
 const selectVisibleButton = document.querySelector("#select-visible-repos");
 const repullVisibleButton = document.querySelector("#repull-visible-button");
@@ -339,6 +341,13 @@ function updateSelectionState() {
   if (repullSelectedButton) {
     repullSelectedButton.disabled = selected.length === 0;
     repullSelectedButton.textContent = selected.length === 0 ? "重 pull 选中" : `重 pull ${selected.length} 个`;
+  }
+
+  if (scheduleSelectedButton) {
+    scheduleSelectedButton.disabled = selected.length === 0;
+    scheduleSelectedButton.textContent = selected.length === 0
+      ? "选中加入定时"
+      : `将 ${selected.length} 个加入定时`;
   }
 
   if (selectAllRepos) {
@@ -673,6 +682,28 @@ repullForm?.addEventListener("submit", async (event) => {
 
 repullVisibleButton?.addEventListener("click", async () => {
   await submitRepull(repullFormDataFor(visibleRepoCheckboxes()), repullVisibleButton);
+});
+
+scheduleSelectedButton?.addEventListener("click", () => {
+  if (!enableSchedulesForm) {
+    return;
+  }
+
+  for (const input of enableSchedulesForm.querySelectorAll("[data-batch-schedule-image]")) {
+    input.remove();
+  }
+
+  const selected = selectedRepoCheckboxes().filter(checkbox => checkbox.checked);
+  for (const checkbox of selected) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "SelectedImages";
+    input.value = checkbox.value;
+    input.dataset.batchScheduleImage = "";
+    enableSchedulesForm.appendChild(input);
+  }
+
+  enableSchedulesForm.requestSubmit();
 });
 
 openSubmitDialogButton?.addEventListener("click", () => {

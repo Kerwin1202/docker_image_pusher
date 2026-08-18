@@ -339,6 +339,37 @@ public class IndexModel : PageModel
         return RedirectToPage(new { search = Search, statusFilter = StatusFilter, repoId = RepoId });
     }
 
+    public async Task<IActionResult> OnPostEnableScheduledImagesAsync(CancellationToken cancellationToken)
+    {
+        var selectedImages = SelectedImages
+            .Where(static x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (selectedImages.Count == 0)
+        {
+            ErrorMessage = "请先选择要加入定时的源镜像。";
+            await LoadAsync(cancellationToken);
+            return Page();
+        }
+
+        try
+        {
+            var result = await _gitHubMirror.SetScheduledImagesAsync(selectedImages, enabled: true, cancellationToken);
+            SuccessMessage = result.ChangedCount > 0
+                ? $"已将 {result.ChangedCount} 个镜像加入定时重新 pull 列表。"
+                : "选中的镜像都已在定时重新 pull 列表中。";
+            CommitUrl = result.CommitUrl;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            await LoadAsync(cancellationToken);
+            return Page();
+        }
+
+        return RedirectToPage(new { search = Search, statusFilter = StatusFilter, repoId = RepoId });
+    }
+
     public async Task<IActionResult> OnPostDisableScheduledImageAsync(CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(ScheduledImage))

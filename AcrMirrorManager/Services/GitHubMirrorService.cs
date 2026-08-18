@@ -144,8 +144,30 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
         bool enabled,
         CancellationToken cancellationToken)
     {
+        var result = await SetScheduledImagesAsync([imageLine], enabled, cancellationToken);
+        return new ScheduledImageUpdateResult(
+            result.SourceImages[0],
+            enabled,
+            result.ChangedCount > 0,
+            result.Branch,
+            result.CommitSha,
+            result.CommitUrl);
+    }
+
+    public async Task<ScheduledImagesUpdateResult> SetScheduledImagesAsync(
+        IReadOnlyCollection<string> imageLines,
+        bool enabled,
+        CancellationToken cancellationToken)
+    {
         EnsureConfigured();
-        var normalizedImage = NormalizeImageLine(imageLine);
+        var normalizedImages = imageLines
+            .Select(NormalizeImageLine)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (normalizedImages.Count == 0)
+        {
+            throw new ArgumentException("请至少选择一个源镜像。", nameof(imageLines));
+        }
 
         await _mutationLock.WaitAsync(cancellationToken);
         try
@@ -158,32 +180,34 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
                 .Where(IsEnabledImageLine)
                 .Select(static x => x.Trim())
                 .ToList();
-            var currentlyEnabled = currentImages.Any(x => ImageEquals(x, normalizedImage));
+            var changedImages = normalizedImages
+                .Where(image => currentImages.Any(current => ImageEquals(current, image)) != enabled)
+                .ToList();
 
-            if (currentlyEnabled == enabled)
+            if (changedImages.Count == 0)
             {
-                return new ScheduledImageUpdateResult(
-                    normalizedImage,
+                return new ScheduledImagesUpdateResult(
+                    normalizedImages,
                     enabled,
-                    Changed: false,
+                    ChangedCount: 0,
                     _options.Branch,
                     null,
                     null);
             }
 
-            var updatedContent = UpdateScheduledImagesFile(file.Content, normalizedImage, enabled);
+            var updatedContent = UpdateScheduledImagesFile(file.Content, changedImages, enabled);
             var action = enabled ? "enable" : "disable";
             var commit = await PutContentFileAsync(
                 _options.ScheduledImagesPath,
                 file,
                 updatedContent,
-                $"mirror: {action} scheduled pull {normalizedImage}",
+                $"mirror: {action} scheduled pull for {changedImages.Count} images",
                 cancellationToken);
 
-            return new ScheduledImageUpdateResult(
-                normalizedImage,
+            return new ScheduledImagesUpdateResult(
+                normalizedImages,
                 enabled,
-                Changed: true,
+                changedImages.Count,
                 _options.Branch,
                 commit.Commit.Sha,
                 commit.Commit.HtmlUrl);
@@ -457,7 +481,10 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
         return hadTrailingNewline || output.Length > 0 ? output + "\n" : output;
     }
 
-    private static string UpdateScheduledImagesFile(string currentContent, string imageLine, bool enabled)
+    private static string UpdateScheduledImagesFile(
+        string currentContent,
+        IReadOnlyCollection<string> imageLines,
+        bool enabled)
     {
         var normalized = currentContent.Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace("\r", "\n", StringComparison.Ordinal);
@@ -468,21 +495,24 @@ public sealed class GitHubMirrorService : IGitHubMirrorService
             lines.RemoveAt(lines.Count - 1);
         }
 
-        var insertAt = lines.Count;
-        for (var i = lines.Count - 1; i >= 0; i--)
+        foreach (var imageLine in imageLines)
         {
-            if (!ImageEquals(Uncomment(lines[i]), imageLine))
+            var insertAt = lines.Count;
+            for (var i = lines.Count - 1; i >= 0; i--)
             {
-                continue;
+                if (!ImageEquals(Uncomment(lines[i]), imageLine))
+                {
+                    continue;
+                }
+
+                insertAt = i;
+                lines.RemoveAt(i);
             }
 
-            insertAt = i;
-            lines.RemoveAt(i);
-        }
-
-        if (enabled)
-        {
-            lines.Insert(insertAt, imageLine);
+            if (enabled)
+            {
+                lines.Insert(insertAt, imageLine);
+            }
         }
 
         return string.Join('\n', lines) + "\n";

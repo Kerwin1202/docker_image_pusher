@@ -28,4 +28,9 @@ public interface IGitHubMirrorService
         string imageLine,
         bool enabled,
         CancellationToken cancellationToken);
+
+    Task<ScheduledImagesUpdateResult> SetScheduledImagesAsync(
+        IReadOnlyCollection<string> imageLines,
+        bool enabled,
+        CancellationToken cancellationToken);
 }

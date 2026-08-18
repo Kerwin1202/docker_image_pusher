@@ -98,6 +98,9 @@
             @Html.AntiForgeryToken()
             <input type="hidden" name="ScheduledImage" id="disable-scheduled-image-input" />
         </form>
+        <form method="post" asp-page-handler="EnableScheduledImages" id="enable-schedules-form" hidden>
+            @Html.AntiForgeryToken()
+        </form>
 
         <div class="content-grid">
             <section class="repo-section">
@@ -111,6 +114,7 @@
                         <button type="button" class="secondary-button compact-button" id="select-visible-repos">选择当前</button>
                         <button type="button" class="secondary-button compact-button" id="repull-visible-button">重 pull 当前</button>
                         <button type="submit" class="primary-button compact-button" form="repull-form" id="repull-selected-button" disabled>重 pull 选中</button>
+                        <button type="button" class="secondary-button compact-button" id="schedule-selected-button" disabled>选中加入定时</button>
                     </div>
                 </form>
                 <nav class="segment-bar" aria-label="仓库状态过滤" id="status-filter" data-current-filter="@Model.StatusFilter">
