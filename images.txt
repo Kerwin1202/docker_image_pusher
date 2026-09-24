@@ -34,7 +34,7 @@
 #docker.io/library/python:3.12-slim
 #docker.io/library/node:20-alpine
 
-#golangboyme/wxocr
+golangboyme/wxocr
 
 #immich
 #ghcr.io/immich-app/immich-server:release
@@ -63,6 +63,6 @@
 #siyuan044/trailsnap-ai
 #siyuan044/trailsnap-server
 #siyuan044/pgvector:pg18-trixie
-# acr-mirror-manager rerun: 2026-08-29 02:01:41Z
 
-uuphy/ipa-harbor:latest
+#uuphy/ipa-harbor:latest
+# acr-mirror-manager rerun: 2026-09-24 11:31:47Z
