@@ -5,3 +5,4 @@ siyuan044/trailsnap-ai
 siyuan044/trailsnap-frontend
 siyuan044/trailsnap-server
 vaultwarden/server:latest
+golangboyme/wxocr
