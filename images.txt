@@ -34,7 +34,7 @@
 #docker.io/library/python:3.12-slim
 #docker.io/library/node:20-alpine
 
-golangboyme/wxocr
+#golangboyme/wxocr
 
 #immich
 #ghcr.io/immich-app/immich-server:release
@@ -66,3 +66,5 @@ golangboyme/wxocr
 
 #uuphy/ipa-harbor:latest
 # acr-mirror-manager rerun: 2026-09-24 11:31:47Z
+
+postgres:18.6-bookworm
