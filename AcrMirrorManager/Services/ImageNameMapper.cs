@@ -37,6 +37,18 @@ public static partial class ImageNameMapper
         return tagSeparator >= 0 ? fileName[(tagSeparator + 1)..] : "latest";
     }
 
+    public static string ToSourceImageReference(string imageLine, string? tag = null)
+    {
+        var sourceImage = ExtractSourceImage(imageLine);
+        if (tag is null)
+        {
+            return sourceImage;
+        }
+
+        var imageWithoutDigest = sourceImage.Split('@', 2)[0];
+        return $"{StripTag(imageWithoutDigest)}:{tag}";
+    }
+
     public static IEnumerable<string> ExtractImageLines(string imagesText, bool includeCommentedImages)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

@@ -136,7 +136,7 @@
                                 <th>状态</th>
                                 <th>定时重新 pull</th>
                                 <th>源镜像</th>
-                                <th>目标</th>
+                                <th>目标镜像</th>
                                 <th>操作</th>
                                 @if (Model.SupportsDelete)
                                 {
@@ -199,10 +199,13 @@
                                         }
                                     </td>
                                     <td>
-                                        <button type="button" class="copy-button" data-copy="@sourceImage">复制源</button>
+                                        <button type="button" class="copy-button" data-copy="@Model.BuildSourceImageReference(repo)">复制源镜像</button>
                                     </td>
                                     <td>
-                                        <button type="button" class="copy-button" data-copy="@Model.BuildDerivedImageAddress(repo)">复制预估</button>
+                                        <div class="image-copy-actions">
+                                            <button type="button" class="copy-button" data-copy="@Model.BuildDerivedImageAddress(repo)">复制目标镜像</button>
+                                            <button type="button" class="copy-button" data-copy="@Model.BuildPullTagCommands(repo)" title="复制两行命令：拉取目标镜像，再标记为源镜像名称">复制 pull + tag 命令</button>
+                                        </div>
                                     </td>
                                     <td>
                                         <button type="button" class="copy-button" data-repull-source="@sourceImage">重 pull</button>
@@ -251,7 +254,7 @@
                             <p>@Model.FormatScheduledPlan(Model.SelectedRepository)</p>
                         </div>
                         <div class="tag-panel-actions">
-                            <button type="button" class="copy-button" data-copy="@Model.BuildSourceImageAddress(Model.SelectedRepository)">复制源</button>
+                            <button type="button" class="copy-button" data-copy="@Model.BuildSourceImageReference(Model.SelectedRepository)">复制源镜像</button>
                             <button type="button" class="copy-button" data-repull-source="@Model.BuildSourceImageAddress(Model.SelectedRepository)">重 pull</button>
                             @if (Model.IsScheduled(Model.SelectedRepository))
                             {
@@ -264,7 +267,8 @@
                             <button type="button" class="copy-button is-danger" data-remove-source="@Model.BuildSourceImageAddress(Model.SelectedRepository)" data-repo-label="@($"{Model.SelectedRepository.Namespace}/{Model.SelectedRepository.Name}")">移除</button>
                             @if (!string.IsNullOrWhiteSpace(Model.DefaultCopyAddress))
                             {
-                                <button type="button" class="copy-button" data-copy="@Model.DefaultCopyAddress">复制默认地址</button>
+                                <button type="button" class="copy-button" data-copy="@Model.DefaultCopyAddress">复制目标镜像</button>
+                                <button type="button" class="copy-button" data-copy="@Model.DefaultPullTagCommands" title="复制两行命令：拉取目标镜像，再标记为源镜像名称">复制 pull + tag 命令</button>
                             }
                             <span>@Model.Tags.Count Tag</span>
                         </div>
@@ -289,7 +293,8 @@
                                     </div>
                                     <div class="tag-meta">
                                         <span class="@Model.StatusCss(tag.Status)">@tag.Status</span>
-                                        <button type="button" class="copy-button" data-copy="@Model.BuildImageAddress(Model.SelectedRepository, tag.Tag)">复制</button>
+                                        <button type="button" class="copy-button" data-copy="@Model.BuildImageAddress(Model.SelectedRepository, tag.Tag)">复制目标镜像</button>
+                                        <button type="button" class="copy-button" data-copy="@Model.BuildPullTagCommands(Model.SelectedRepository, tag.Tag)" title="复制两行命令：拉取该 Tag 的目标镜像，再标记回源镜像的相同 Tag">复制 pull + tag 命令</button>
                                     </div>
                                     @if (Model.SupportsDelete)
                                     {

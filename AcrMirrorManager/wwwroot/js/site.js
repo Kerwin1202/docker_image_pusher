@@ -168,7 +168,8 @@ function renderTagPanel(payload) {
   const tags = payload.tags || [];
   const sourceImage = repo.sourceImage || sourceImageFromSummary(repo.summary);
   const defaultButton = payload.defaultCopyAddress
-    ? `<button type="button" class="copy-button" data-copy="${escapeHtml(payload.defaultCopyAddress)}">复制默认地址</button>`
+    ? `<button type="button" class="copy-button" data-copy="${escapeHtml(payload.defaultCopyAddress)}">复制目标镜像</button>
+       <button type="button" class="copy-button" data-copy="${escapeHtml(payload.defaultPullTagCommands)}" title="复制两行命令：拉取目标镜像，再标记为源镜像名称">复制 pull + tag 命令</button>`
     : "";
 
   const tagRows = tags.length === 0
@@ -181,7 +182,8 @@ function renderTagPanel(payload) {
           </div>
           <div class="tag-meta">
             <span class="${escapeHtml(tag.statusClass)}">${escapeHtml(tag.status)}</span>
-            <button type="button" class="copy-button" data-copy="${escapeHtml(tag.copyAddress)}">复制</button>
+            <button type="button" class="copy-button" data-copy="${escapeHtml(tag.copyAddress)}">复制目标镜像</button>
+            <button type="button" class="copy-button" data-copy="${escapeHtml(tag.pullTagCommands)}" title="复制两行命令：拉取该 Tag 的目标镜像，再标记回源镜像的相同 Tag">复制 pull + tag 命令</button>
           </div>
         </article>
       `).join("");
@@ -196,7 +198,7 @@ function renderTagPanel(payload) {
         <p>${escapeHtml(repo.scheduledPlan || "未定时")}</p>
       </div>
       <div class="tag-panel-actions">
-        <button type="button" class="copy-button" data-copy="${escapeHtml(sourceImage)}">复制源</button>
+        <button type="button" class="copy-button" data-copy="${escapeHtml(repo.sourceCopyAddress)}">复制源镜像</button>
         <button type="button" class="copy-button" data-repull-source="${escapeHtml(sourceImage)}">重 pull</button>
         ${scheduleButtonsHtml(sourceImage, Boolean(repo.isScheduled))}
         <button type="button" class="copy-button is-danger" data-remove-source="${escapeHtml(sourceImage)}" data-repo-label="${escapeHtml(repo.namespace)}/${escapeHtml(repo.name)}">移除</button>
@@ -284,8 +286,13 @@ function upsertRepository(repository) {
       <small class="probe-plan" data-schedule-plan>${escapeHtml(scheduledPlan)}</small>
       ${scheduleButtonsHtml(sourceImage, isScheduled)}
     </td>
-    <td><button type="button" class="copy-button" data-copy="${escapeHtml(sourceImage)}">复制源</button></td>
-    <td><button type="button" class="copy-button" data-copy="${escapeHtml(repository.copyAddress)}">复制预估</button></td>
+    <td><button type="button" class="copy-button" data-copy="${escapeHtml(repository.sourceCopyAddress)}">复制源镜像</button></td>
+    <td>
+      <div class="image-copy-actions">
+        <button type="button" class="copy-button" data-copy="${escapeHtml(repository.copyAddress)}">复制目标镜像</button>
+        <button type="button" class="copy-button" data-copy="${escapeHtml(repository.pullTagCommands)}" title="复制两行命令：拉取目标镜像，再标记为源镜像名称">复制 pull + tag 命令</button>
+      </div>
+    </td>
     <td>
       <button type="button" class="copy-button" data-repull-source="${escapeHtml(sourceImage)}">重 pull</button>
       <button type="button" class="copy-button is-danger" data-remove-source="${escapeHtml(sourceImage)}" data-repo-label="${escapeHtml(repository.namespace)}/${escapeHtml(repository.name)}">移除</button>

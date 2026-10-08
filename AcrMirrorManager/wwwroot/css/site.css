@@ -267,13 +267,14 @@ textarea:focus {
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 480px;
   gap: 18px;
   align-items: start;
 }
 
 .repo-section,
 .tag-panel {
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -282,6 +283,7 @@ textarea:focus {
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   border-bottom: 1px solid var(--line);
@@ -290,12 +292,14 @@ textarea:focus {
 
 .bulk-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
 
 .segment-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   border-bottom: 1px solid var(--line);
   padding: 10px 14px;
@@ -322,6 +326,7 @@ textarea:focus {
 .search-box {
   display: grid;
   grid-template-columns: 24px 1fr;
+  min-width: 0;
   flex: 1;
   align-items: center;
   border: 1px solid var(--line-strong);
@@ -342,7 +347,7 @@ textarea:focus {
 
 table {
   width: 100%;
-  min-width: 1380px;
+  min-width: 1280px;
   border-collapse: collapse;
 }
 
@@ -361,13 +366,15 @@ td {
 
 th:nth-child(2),
 td:nth-child(2) {
-  min-width: 300px;
+  width: 220px;
+  min-width: 220px;
+  max-width: 260px;
 }
 
 th:nth-child(3),
 td:nth-child(3) {
-  width: 300px;
-  min-width: 300px;
+  width: 240px;
+  min-width: 240px;
 }
 
 .select-cell input {
@@ -412,6 +419,7 @@ tbody tr.is-fresh {
 .repo-link {
   display: grid;
   gap: 5px;
+  overflow-wrap: anywhere;
 }
 
 .repo-summary {
@@ -498,6 +506,12 @@ tbody tr.is-fresh {
   white-space: nowrap;
 }
 
+.image-copy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .copy-button:hover,
 .copy-button.is-copied {
   border-color: var(--accent);
@@ -546,12 +560,16 @@ tbody tr.is-fresh {
 }
 
 .tag-panel-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
   gap: 10px;
   align-items: start;
   border-bottom: 1px solid var(--line);
   padding: 16px;
+}
+
+.tag-panel-header > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .tag-panel-header span {
@@ -566,7 +584,7 @@ tbody tr.is-fresh {
 .tag-panel-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
 }
 
@@ -577,7 +595,7 @@ tbody tr.is-fresh {
 
 .tag-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   border-bottom: 1px solid var(--line);
@@ -587,6 +605,10 @@ tbody tr.is-fresh {
 .tag-row strong,
 .tag-row small {
   display: block;
+}
+
+.tag-row strong {
+  overflow-wrap: anywhere;
 }
 
 .tag-row small {
@@ -600,7 +622,7 @@ tbody tr.is-fresh {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .empty-cell,
@@ -624,7 +646,7 @@ tbody tr.is-fresh {
 @media (max-width: 1100px) {
   .app-shell,
   .content-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

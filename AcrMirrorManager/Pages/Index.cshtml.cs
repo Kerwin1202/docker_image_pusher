@@ -69,21 +69,16 @@ public class IndexModel : PageModel
 
     public bool SupportsDelete => _acrRegistry.SupportsDelete;
 
-    public string? DefaultCopyAddress
-    {
-        get
-        {
-            if (SelectedRepository is null || Tags.Count == 0)
-            {
-                return null;
-            }
+    private string? DefaultCopyTag => Tags.FirstOrDefault(x => x.Tag.Equals("latest", StringComparison.OrdinalIgnoreCase))?.Tag
+        ?? Tags.FirstOrDefault()?.Tag;
 
-            var tag = Tags.FirstOrDefault(x => x.Tag.Equals("latest", StringComparison.OrdinalIgnoreCase))?.Tag
-                ?? Tags[0].Tag;
+    public string? DefaultCopyAddress => SelectedRepository is null || DefaultCopyTag is null
+        ? null
+        : BuildImageAddress(SelectedRepository, DefaultCopyTag);
 
-            return BuildImageAddress(SelectedRepository, tag);
-        }
-    }
+    public string? DefaultPullTagCommands => SelectedRepository is null || DefaultCopyTag is null
+        ? null
+        : BuildPullTagCommands(SelectedRepository, DefaultCopyTag);
 
     public string? ErrorMessage { get; private set; }
 
@@ -418,13 +413,15 @@ public class IndexModel : PageModel
             ok = true,
             repository = ToRepositoryDto(repository),
             defaultCopyAddress = defaultTag is null ? null : BuildImageAddress(repository, defaultTag),
+            defaultPullTagCommands = defaultTag is null ? null : BuildPullTagCommands(repository, defaultTag),
             tags = tags.Select(tag => new
             {
                 tag = tag.Tag,
                 digest = tag.Digest,
                 status = tag.Status,
                 statusClass = StatusCss(tag.Status),
-                copyAddress = BuildImageAddress(repository, tag.Tag)
+                copyAddress = BuildImageAddress(repository, tag.Tag),
+                pullTagCommands = BuildPullTagCommands(repository, tag.Tag)
             })
         });
     }
@@ -626,6 +623,28 @@ public class IndexModel : PageModel
         return repository.Summary.Split(" -> ", 2, StringSplitOptions.None).FirstOrDefault()?.Trim() ?? string.Empty;
     }
 
+    public string BuildSourceImageReference(AcrRepository repository)
+    {
+        return ImageNameMapper.ToSourceImageReference(BuildSourceImageAddress(repository));
+    }
+
+    public string BuildPullTagCommands(AcrRepository repository, string? tag = null)
+    {
+        var sourceLine = BuildSourceImageAddress(repository);
+        var selectedTag = tag ?? ImageNameMapper.ToAliyunTag(sourceLine);
+        var targetImage = tag is null ? BuildDerivedImageAddress(repository) : BuildImageAddress(repository, tag);
+        var sourceImage = ImageNameMapper.ToSourceImageReference(sourceLine, selectedTag);
+
+        return $"docker pull {ShellArgument(targetImage)}\ndocker tag {ShellArgument(targetImage)} {ShellArgument(sourceImage)}";
+    }
+
+    private static string ShellArgument(string value)
+    {
+        return value.Length > 0 && value.All(c => char.IsAsciiLetterOrDigit(c) || "._:/@-".Contains(c))
+            ? value
+            : "'" + value.Replace("'", "'\"'\"'", StringComparison.Ordinal) + "'";
+    }
+
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
         try
@@ -700,7 +719,9 @@ public class IndexModel : PageModel
             pendingRefreshCount = repository.PendingRefreshCount,
             summary = repository.Summary,
             sourceImage = BuildSourceImageAddress(repository),
+            sourceCopyAddress = BuildSourceImageReference(repository),
             copyAddress = BuildDerivedImageAddress(repository),
+            pullTagCommands = BuildPullTagCommands(repository),
             tagsUrl = Url.Page("/Index", "Tags", new { repoId = repository.RepoId })
         };
     }
